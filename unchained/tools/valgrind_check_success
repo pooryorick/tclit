@@ -1,0 +1,38 @@
+#! /usr/bin/env tclsh
+
+# Copyright © 2021 Nathan Coulter
+
+# You may distribute and/or modify this program under the terms of the GNU
+# Affero General Public License as published by the Free Software Foundation,
+# either version 3 of the License, or (at your option) any later version.
+#
+# See the file "COPYING" for information on usage and redistribution
+# of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+
+proc main {sourcetype source} {
+	switch $sourcetype {
+		file {
+			set chan [open $source]
+			try {
+				set data [read $chan]
+			} finally {
+				close $chan
+			}
+		}
+		string {
+			set data $source
+		}
+		default {
+			error [list {wrong # args}]
+		}
+	}
+	set found [regexp -inline -all {blocks are\
+	    (?:(?:(?:definitely|indirectly|possibly) lost)|still reachable)} $data]
+	if {[llength $found]} {
+		puts 0
+	} else {
+		puts 1
+	}
+	flush stdout
+}
+main {*}$argv

@@ -1,0 +1,141 @@
+'\"
+'\" Copyright (c) 1989-1993 The Regents of the University of California.
+'\" Copyright (c) 1994-1997 Sun Microsystems, Inc.
+'\"
+'\" See the file "license.terms" for information on usage and redistribution
+'\" of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+'\"
+.TH Tcl_SetResult 3 9.0 Tcl "Tcl Library Procedures"
+.so man.macros
+.BS
+.SH NAME
+Tcl_SetObjResult, Tcl_GetObjResult, Tcl_SetResult, Tcl_GetStringResult, Tcl_AppendResult, Tcl_AppendElement, Tcl_ResetResult, Tcl_TransferResult \- manipulate Tcl result
+.SH SYNOPSIS
+.nf
+\fB#include <tcl.h>\fR
+.sp
+\fBTcl_SetObjResult\fR(\fIinterp, objPtr\fR)
+.sp
+Tcl_Obj *
+\fBTcl_GetObjResult\fR(\fIinterp\fR)
+.sp
+\fBTcl_SetResult\fR(\fIinterp, result, freeProc\fR)
+.sp
+const char *
+\fBTcl_GetStringResult\fR(\fIinterp\fR)
+.sp
+\fBTcl_AppendResult\fR(\fIinterp, result, result, ... , \fB(char *)NULL\fR)
+.sp
+\fBTcl_ResetResult\fR(\fIinterp\fR)
+.sp
+\fBTcl_TransferResult\fR(\fIsourceInterp, code, targetInterp\fR)
+.sp
+\fBTcl_AppendElement\fR(\fIinterp, element\fR)
+.fi
+.SH ARGUMENTS
+.AS Tcl_FreeProc sourceInterp out
+.AP Tcl_Interp *interp out
+The interpreter get or set the result for.
+.AP Tcl_Obj *objPtr in
+A value to set the result to.
+.AP char *result in
+The string value set the result to, or to append to the existing result.
+.AP "const char" *element in
+The string value to append as a list element
+to the existing result of \fIinterp\fR.
+.AP Tcl_FreeProc *freeProc in
+Pointer to a procedure to call to release storage at
+\fIresult\fR.
+.AP Tcl_Interp *sourceInterp in
+The interpreter to transfer the result and return options from.
+.AP Tcl_Interp *targetInterp in
+The interpreter to transfer the result and return options to.
+.AP int code in
+Return code value that controls transfer of return options.
+.BE
+.SH DESCRIPTION
+.PP
+These procedures manipulate the result of an interpreter.  Some procedures
+provide a Tcl_Obj interface while others provide a string interface.  For
+example, \fBTcl_SetObjResult\fR accepts a Tcl_Obj and \fBTcl_SetResult\fR
+accepts a char *.  Similarly, \fBTcl_GetObjResult\fR produces a Tcl_Obj * and
+\fBTcl_GetStringResult\fR produces a char *.  The procedures can be mixed and
+matched.  For example, if \fBTcl_SetObjResult\fR is called to set the result to
+a Tcl_Obj value, and then \fBTcl_GetStringResult\fR is called, it returns a
+char * (but see caveats below).
+.PP
+\fBTcl_SetObjResult\fR sets \fIobjPtr\fR as the result for \fIinterp\fR,
+replacing any existing result.
+.PP
+\fBTcl_GetObjResult\fR returns the result for \fIinterp\fR, without
+incrementing its reference count.
+.PP
+\fBTcl_SetResult\fR sets \fIresult\fR as the result for \fIinterp\fR, replacing
+any existing result, and calls \fIfreeProc\fR to free \fIresult\fR.  See \fBTHE
+TCL_FREEPROC ARGUMENT TO TCL_SETRESULT\fR below.  If \fIresult\fR is
+\fBNULL\fR, ignores \fIfreeProc\fR and sets the result for \fIinterp\fR to
+point to the empty string.
+.PP
+\fBTcl_GetStringResult\fR returns the result for \fIinterp\fR as a string, i.e.
+the bytes of the Tcl_Obj for the result, which can be decoded using
+\fBTcl_UtfToExternal\fR.  This value is freed when its corresponding Tcl_Obj is
+freed.Programmers are encouraged to use the newer Tcl_Obj API procedures, e.g.
+to call \fBTcl_GetObjResult\fR instead.
+.PP
+\fBTcl_ResetResult\fR sets the empty string as the result for \fIinterp\fR and
+clears the error state managed by \fBTcl_AddErrorInfo\fR,
+\fBTcl_AddObjErrorInfo\fR, and \fBTcl_SetErrorCode\fR.
+.PP
+\fBTcl_AppendResult\fR builds up a result from smaller pieces, appending each
+\fIresult\fR in order to the current result for \fIinterp\fR.  It may be called
+repeatedly as additional pieces of the result are produced, and manages the
+storage for the \fIinterp\fR's result, allocating a larger result area if
+necessary.  It also manages conversion to and from the \fIresult\fR field of
+the \fIinterp\fR to handle backward-compatibility with old-style extensions.
+Any number of \fIresult\fR arguments may be passed in a single call; the last
+argument in the list must be (char *)NULL.
+.PP
+\fBTcl_TransferResult\fR transfers interpreter state from \fIsourceInterp\fR to
+\fItargetInterp\fR, both of which must have been created in the same thread,
+resets the result in \fIsourceInterp\fR, and moves the return options
+dictionary as controlled by the return code value \fIcode\fR in the same manner
+as \fBTcl_GetReturnOptions\fR.
+.PP
+If \fIsourceInterp\fR and \fItargetInterp\fR are the same, nothing is done.
+.SH "DEPRECATED INTERFACES"
+.SS "OLD STRING PROCEDURES"
+.PP
+The following procedures are deprecated since they manipulate the Tcl result as
+a string.  Procedures such as \fBTcl_SetObjResult\fR can be significantly more
+efficient.
+.PP
+\fBTcl_AppendElement\fR is like \fBTcl_AppendResult\fR, but it appends only one
+piece, and also appends that piece as a list item.
+\fBTcl_AppendElement\fR adds backslashes or braces as necessary to ensure that
+\fIelement\fR is properly formatted as a list item.  Under normal conditions,
+\fBTcl_AppendElement\fR adds a space character to \fIinterp\fR's result just
+before adding the new list element, so that the list elements in the result are
+properly separated.  However if the new list element is the first item in the
+list or sublist (i.e. \fIinterp\fR's current result is empty, or consists of
+the single character
+.QW { ,
+or ends in the characters
+.QW " {" )
+then no space is added.
+.SH "THE TCL_FREEPROC ARGUMENT TO TCL_SETRESULT"
+.PP
+\fIFreeProc\fR has the following type:
+.PP
+.CS
+typedef void \fBTcl_FreeProc\fR(
+        void *\fIblockPtr\fR);
+.CE
+.PP
+When \fIfreeProc\fR is called, \fIblockPtr\fR is the \fIresult\fR value passed
+to \fBTcl_SetResult\fR.
+
+.SH "SEE ALSO"
+Tcl_AddErrorInfo, Tcl_CreateObjCommand, Tcl_SetErrorCode, Tcl_Interp,
+Tcl_GetReturnOptions
+.SH KEYWORDS
+append, command, element, list, value, result, return value, interpreter

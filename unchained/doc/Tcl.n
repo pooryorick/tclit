@@ -1,0 +1,216 @@
+'\"
+'\" Copyright (c) 1993 The Regents of the University of California.
+'\" Copyright (c) 1994-1996 Sun Microsystems, Inc.
+'\" Copyright (c) 2023 Nathan Coulter
+'\"
+'\" See the file "license.terms" for information on usage and redistribution
+'\" of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+'\"
+'\" You may distribute and/or modify this program under the terms of the GNU
+'\" Affero General Public License as published by the Free Software Foundation,
+'\" either version 3 of the License, or (at your option) any later version.
+'\"
+'\" See the file "COPYING" for information on usage and redistribution.
+'\"
+.TH Tcl n "8.6" Tcl "Tcl Built-In Commands"
+.so man.macros
+.BS
+.SH NAME
+Tcl \- Tool Command Language
+.SH SYNOPSIS
+Summary of Tcl language syntax.
+.BE
+.SH DESCRIPTION
+.PP
+The following rules define the syntax and semantics of the Tcl language:
+.
+.IP "[1] \fBScript.\fR"
+A script is composed of zero or more commands delimited by semi-colons or
+newlines.
+.IP "[2] \fBCommand.\fR"
+A command is composed of zero or more words delimited by whitespace.  The
+replacement for a substitution is included verbatim in the word. For example, a
+space in the replacement is included in the word rather than becoming a
+delimiter, and \fI\\\\\fR becomes a single backslash in the word.  Each word is
+processed from left to right and each substitution is performed as soon as it
+is complete.
+For example, the command
+.RS
+.PP
+.CS
+set y [set x 0][incr x][incr x]
+.CE
+.PP
+is composed of three words, and sets the value of \fIy\fR to \fI012\fR.
+.PP
+If hash
+.PQ #
+is the first character of what would otherwise be the first word of a command,
+all characters up to the next newline are ignored.
+.RE
+.
+.IP "[3] \fBBraced word.\fR"
+If a word is enclosed in braces
+.PQ {
+and
+.PQ } ""
+, the braces are removed and the enclosed characters become the word.  No
+substitutions are performed.  Nested pairs of braces may occur within the word.
+A brace preceded by an odd number of backslashes is not considered part of a
+pair, and neither brace nor the backslashes are removed from the word.
+.
+.IP "[4] \fBQuoted word.\fR"
+If a word is enclosed in double quotes
+.PQ \N'34'
+, the double quotes are removed and the enclosed characters become the word.
+Substitutions are performed.
+.
+.IP "[5] \fBList.\fR"
+A list has the form of a single command.  Newline is whitespace, and semicolon
+has no special interpretation.  There is no script evaluation so there is no
+argument expansion, variable substitution, or command substitution: Dollar-sign
+and open bracket have no special interpretation, and what would be argument
+expansion in a script is invalid in a list.
+.
+.IP "[6] \fBArgument expansion.\fR"
+If
+.QW {*}
+prefixes a word, it is removed.  After any remaining enclosing braces or quotes
+are processed and applicable substitutions performed, the word, which must
+be a list, is removed from the command, and in its place each word in the
+list becomes an additional word in the command.  For example,
+.CS
+cmd a {*}{b [c]} d {*}{$e f {g h}}
+.CE
+is equivalent to
+.CS
+cmd a b {[c]} d {$e} f {g h} .
+.CE
+.
+.IP "[7] \fBEvaluation.\fR"
+To evaluate a script, an interpreter evaluates each successive command.  The
+first word identifies a procedure, and the remaining words are passed to that
+procedure for further evaluation.  The procedure interprets each argument in
+its own way, e.g. as an integer, variable name, list, mathematical expression,
+script, or in some other arbitrary way.  The result of the last command is the
+result of the script.
+.
+.IP "[8] \fBCommand substitution.\fR"
+Each pair of brackets
+.PQ [
+and
+.PQ ] ""
+encloses a script and is replaced by the result of that script.
+.IP "[9] \fBVariable substitution.\fR"
+Each of the following forms begins with dollar sign
+.PQ $
+and is replaced by the value of the identified variable.  \fIname\fR names the
+variable and is composed of ASCII letters (\fBA\fR\(en\fBZ\fR and
+\fBa\fR\(en\fBz\fR), digits (\fB0\fR\(en\fB9\fR), underscores, or namespace
+delimiters (two or more colons).  \fIindex\fR is the name of an individual
+variable within an array variable, and may be empty.
+.RS
+.TP 15
+\fB$\fIname\fR
+.
+\fIname\fR may not be empty.
+.TP 15
+\fB$\fIname\fB(\fIindex\fB)\fR
+.
+\fIname\fR may be empty.  Substitutions are performed on \fIindex\fR.
+.TP 15
+\fB${\fIname\fB}\fR
+.
+\fIname\fR may be empty.
+.TP 15
+\fB${\fIname(index)\fB}\fR
+.
+\fIname\fR may be empty. No substitutions are performed.
+.RE
+Variables that are not accessible through one of the forms above may be
+accessed through other mechanisms, e.g. the \fBset\fR command.
+.IP "[10] \fBBackslash substitution.\fR"
+Each backslash
+.PQ \e
+that is not part of one of the forms listed below is removed, and the next
+character is included in the word verbatim, which allows the inclusion of
+characters that would normally be interpreted, namely whitespace, braces,
+brackets, double quote, dollar sign, and backslash.  The following sequences
+are replaced as described:
+.RS
+.RS
+.RS
+.TP 7
+\e\fBa\fR
+.
+Audible alert (bell) (U+7).
+.TP 7
+\e\fBb\fR
+.
+Backspace (U+8).
+.TP 7
+\e\fBf\fR
+.
+Form feed (U+C).
+.TP 7
+\e\fBn\fR
+.
+Newline (U+A).
+.TP 7
+\e\fBr\fR
+.
+Carriage-return (U+D).
+.TP 7
+\e\fBt\fR
+.
+Tab (U+9).
+.TP 7
+\e\fBv\fR
+.
+Vertical tab (U+B).
+.TP 7
+\e\fB<newline>\fIwhiteSpace\fR
+.
+Newline preceded by an odd number of backslashes, along with the consecutive
+spaces and tabs that immediately follow it, is replaced by a single space.
+Because this happens before the command is split into words, it occurs even
+within braced words, and if the resulting space may subsequently be treated as
+a word delimiter.
+.TP 7
+\e\e
+.
+Backslash
+.PQ \e "" .
+.TP 7
+\e\fIooo\fR
+.
+Up to three octal digits form an eight-bit value for a Unicode character in the
+range \fI0\fR\(en\fI377\fR, i.e. U+0\(enU+FF.  Only the digits that result in a
+number in this range are consumed.
+.TP 7
+\e\fBx\fIhh\fR
+.
+Up to two hexadecimal digits form an eight-bit value for a Unicode character in
+the range \fI0\fR\(en\fIFF\fR.
+.TP 7
+\e\fBu\fIhhhh\fR
+.
+Up to four hexadecimal digits form a 16-bit value for a Unicode character in
+the range \fI0\fR\(en\fIFFFF\fR.
+.TP 7
+\e\fBU\fIhhhhhhhh\fR
+.
+Up to eight hexadecimal digits form a 21-bit value for a Unicode character in
+the range \fI0\fR\(en\fI10FFFF\fR.  Only the digits that result in a number in
+this range are consumed.
+.RE
+.RE
+.PP
+.RE
+.
+.SH KEYWORDS
+backslash, command, comment, script, substitution, variable
+'\" Local Variables:
+'\" mode: nroff
+'\" fill-column: 78
+'\" End:

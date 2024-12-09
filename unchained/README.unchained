@@ -1,0 +1,99 @@
+This program is released under the GNU Affero General Public License.  See
+COPYING for details.
+
+Tcl unchained is a branch of Tcl that has the following goals:
+
+	Correctness.
+
+	Technical merit.
+
+	Clean code.
+
+	Modular code at all layers.
+	
+	Fast pace of development.
+
+	Quick adoption of new features.
+
+	Eschew novel mini-language syntax in favor of the Tcl list format.
+
+In order to achieve these goals, backwards compatibility is not a goal, and is
+not considered when choosing what changes to make.  However, it is a goal to
+provide a reasonable upgrade path by releasing early and often in order to
+minimize the amount of change needed to migrate to the next version.  Users
+should be prepared to modify their own code as needed if they wish to use later
+versions.
+
+Original work in Tcl unchained is licensed under the GNU Affero General Public
+License.
+
+Priorities
+
+	Further development over stability.
+
+	Technical consistency over stability.
+
+	Clean code over backwards-compatibility.
+
+	Single-topic release over kitchen-sink releases.
+
+
+Policies
+
+	If a change represents a technical improvement, a correction, or a
+	stylistic improvement, it is acceptable even if the size change is only one
+	character, and even if the change is in a comment or other non-functional
+	part of the content.
+
+	Arguments should be resolved through code wherever reasonably possible.  
+
+	Style rules:
+
+		Only the tab character is used for indentation.
+
+	    There should be no unnecessary whitespace at the end of a line.
+
+	All other style guidelines are optional.
+
+	The author of the code chooses the style.  Except for the non-optional
+	sytle indentation, code should not be modified simply to change the
+	style, but if it is modified for some other good reason, the style may
+	be changed.
+
+	Reference documentation should be concise and complete. Examples are
+	acceptable, but tutorial exposition is not.  Tutorial and other
+	documentation belong elsewhere.
+
+
+Tcl unchained presents different interfaces from those of other releases ot
+Tcl.  In contrast with other implementations of Tcl:
+
+	Each new channel is by default configured for the strict profile.
+
+	When [read] returns an error because of an encoding error on a blocking
+	channel, the data successfully read so far can be found in the {-result
+	read} entry of the return options dictionary
+
+	No new fields have been added to Tcl_ObjType.
+
+	The string representation for the "script" argument to [chan event] is
+	not necessarily generated.
+
+	[chan postevent] is asynchronous:  The handler for an event is called
+	through the event loop, not synchronously from [chan postevent].  See
+	[9bcec7cd880540c3].
+
+	[exec] is extended as described in TIP 424, improving exec.
+
+	[exec] use the strict profile, not the replace profile.
+
+	Public functions are provided for creating a new Tcl_ObjType structure
+	and binding functions to it.  The functions implement abstract
+	data types such as string, list, and dict.
+
+	Tcl_ObjType has not been expande to contain any new fields.
+
+	TCL_PACKAGE_PATH is a Tcl list.
+
+
+

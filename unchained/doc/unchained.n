@@ -1,0 +1,29 @@
+'\"
+'\" Copyright (c) 2023-2024 Nathan Coulter
+'\"
+'\" See the file "license.terms" for information on usage and redistribution
+'\" of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+'\"
+'\" You may distribute and/or modify this program under the terms of the GNU
+'\" Affero General Public License as published by the Free Software Foundation,
+'\" either version 3 of the License, or (at your option) any later version.
+'\"
+'\" See the file "COPYING" for information on usage and redistribution.
+.TH Tcl Unchained
+.so man.macros
+.BS
+.SH NAME
+Unchained \- A version of Tcl that's off the chain.
+.SH SYNOPSIS
+Summary of Tcl Unchained.
+.BE
+.SH CONTRAST with Tcl trunk branch API
+.PP
+In the http module, the default encoding handling profile is "strict".
+.SH CONTRAST with Tcl trunk internals
+.
+.SH KEYWORDS
+'\" Local Variables:
+'\" mode: nroff
+'\" fill-column: 78
+'\" End:
