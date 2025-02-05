@@ -1342,7 +1342,7 @@ Tcl_CreateInterp(void)
 
     Tcl_PkgProvideEx(interp, "Tcl", TCL_PATCH_LEVEL, &tclStubs);
     Tcl_PkgProvideEx(interp, "tcl", TCL_PATCH_LEVEL, &tclStubs);
-    Tcl_PkgProvideEx(interp, "TclUnchained", TCL_PATCH_LEVEL, &tclStubs);
+    Tcl_PkgProvideEx(interp, "Tclit", TCL_PATCH_LEVEL, &tclStubs);
     Tcl_CmdInfo info2;
     Tcl_Command buildInfoCmd = Tcl_CreateObjCommand(interp, "::tcl::build-info",
 	    buildInfoObjCmd, (void *)version, NULL);

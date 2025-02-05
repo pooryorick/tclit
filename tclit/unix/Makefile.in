@@ -2577,7 +2577,7 @@ dist: $(UNIX_DIR)/configure $(UNIX_DIR)/tclConfig.h.in $(UNIX_DIR)/tcl.pc.in gen
 		$(SHQ_TOP_DIR)/win/tcl.m4 $(SHQ_TOP_DIR)/win/aclocal.m4 \
 		$(SHQ_TOP_DIR)/win/tclsh.exe.manifest.in $(SHQ_TOP_DIR)/win/tclUuid.h.in \
 		$(SHQ_TOP_DIR)/win/gitmanifest.in $(SHQ_TOP_DIR)/win/svnmanifest.in $(SHQ_DISTDIR)/win
-	#nmakehlp.exe doesn't exist in the "unchained" branch
+	#nmakehlp.exe doesn't exist in Tclit
 	#$(DIST_INSTALL_DATA) $(SHQ_TOP_DIR)/win/x86_64-w64-mingw32-nmakehlp.exe $(SHQ_DISTDIR)/win
 	#chmod 775 $(SHQ_DISTDIR)/win/x86_64-w64-mingw32-nmakehlp.exe
 	$(DIST_INSTALL_SCRIPT) $(SHQ_TOP_DIR)/win/configure $(SHQ_DISTDIR)/win

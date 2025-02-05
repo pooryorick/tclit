@@ -1,7 +1,7 @@
 This program is released under the GNU Affero General Public License.  See
 COPYING for details.
 
-Tcl unchained is a branch of Tcl that has the following goals:
+Tclit is a branch of Tcl that has the following goals:
 
 	Correctness.
 
@@ -24,7 +24,7 @@ minimize the amount of change needed to migrate to the next version.  Users
 should be prepared to modify their own code as needed if they wish to use later
 versions.
 
-Original work in Tcl unchained is licensed under the GNU Affero General Public
+Original work in Tclit is licensed under the GNU Affero General Public
 License.
 
 Priorities
@@ -65,7 +65,7 @@ Policies
 	documentation belong elsewhere.
 
 
-Tcl unchained presents different interfaces from those of other releases ot
+Tclit presents different interfaces from those of other releases ot
 Tcl.  In contrast with other implementations of Tcl:
 
 	Each new channel is by default configured for the strict profile.

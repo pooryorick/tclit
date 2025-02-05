@@ -9,13 +9,13 @@
 '\" either version 3 of the License, or (at your option) any later version.
 '\"
 '\" See the file "COPYING" for information on usage and redistribution.
-.TH Tcl Unchained
+.TH Tclit
 .so man.macros
 .BS
 .SH NAME
-Unchained \- A version of Tcl that's off the chain.
+Tclit \- A version of Tcl that's off the chain.
 .SH SYNOPSIS
-Summary of Tcl Unchained.
+Summary of Tclit .
 .BE
 .SH CONTRAST with Tcl trunk branch API
 .PP
