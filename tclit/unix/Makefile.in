@@ -2472,17 +2472,18 @@ $(MAC_OSX_DIR)/configure: $(MAC_OSX_DIR)/configure.ac $(UNIX_DIR)/configure
 $(UNIX_DIR)/tclConfig.h.in: $(MAC_OSX_DIR)/configure
 	cd $(SHQ_MAC_OSX_DIR); autoheader; touch $(SHQ_@)
 
-tclUuid.h: $(TOP_DIR)/manifest.uuid
+tclUuid.h: manifest.uuid
 	echo '#define TCL_VERSION_UUID \' >$(SHQ_@)
-	cat $(SHQ_TOP_DIR)/manifest.uuid >>$(SHQ_@)
+	cat manifest.uuid >>$(SHQ_@)
 	echo "" >>$(SHQ_@)
 
-$(TOP_DIR)/manifest.uuid:
-	printf "git-" >$(SHQ_TOP_DIR)/manifest.uuid
-	(cd $(SHQ_TOP_DIR); git rev-parse HEAD >>$(SHQ_TOP_DIR)/manifest.uuid || \
-	    (printf "svn-r" >$(SHQ_TOP_DIR)/manifest.uuid ; \
-	    svn info --show-item last-changed-revision >>$(SHQ_TOP_DIR)/manifest.uuid) || \
-	    printf "unknown" >$(SHQ_TOP_DIR)/manifest.uuid)
+manifest.uuid:
+	printf "git-" >manifest.uuid
+	(cd $(SHQ_TOP_DIR); git rev-parse HEAD) >> manifest.uuid || \
+	(cd $(SHQ_TOP_DIR); \
+	    (printf "svn-r" ; \
+	    svn info --show-item last-changed-revision)) > manifest.uuid || \
+	    printf "unknown" >manifest.uuid
 
 dist: $(UNIX_DIR)/configure $(UNIX_DIR)/tclConfig.h.in $(UNIX_DIR)/tcl.pc.in genstubs \
 		$(MAC_OSX_DIR)/configure $(TOP_DIR)/manifest.uuid dist-packages ${NATIVE_TCLSH}
