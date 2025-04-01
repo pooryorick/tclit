@@ -95,7 +95,6 @@ typedef struct ThreadSpecificData {
 				/* Next notifier in global list of notifiers.
 				 * Access is controlled by the listLock global
 				 * mutex. */
-    int serviceCount;
 } ThreadSpecificData;
 
 static Tcl_ThreadDataKey dataKey;
@@ -158,7 +157,6 @@ TclInitNotifier(void)
 	tsdPtr->initialized = 1;
 	tsdPtr->nextPtr = firstNotifierPtr;
 	firstNotifierPtr = tsdPtr;
-	tsdPtr->serviceCount = 0;
     }
     Tcl_MutexUnlock(&listLock);
 }
@@ -699,13 +697,6 @@ Tcl_ServiceEvent(
     }
 
 
-    if (tsdPtr->serviceCount > 100) {
-	tsdPtr->serviceCount = 0;
-	if (TclDoOneIdle()) {
-	    return 1;
-	}
-    }
-
     /*
      * Loop through all the events in the queue until we find one that can
      * actually be handled.
@@ -755,8 +746,6 @@ Tcl_ServiceEvent(
 		tsdPtr->roundDelimPtr = NULL;
 		tsdPtr->roundFinished = 1;
 	    }
-
-	    tsdPtr->serviceCount++;
 
 	    if (tsdPtr->firstEventPtr == evPtr) {
 		tsdPtr->firstEventPtr = evPtr->nextPtr;
