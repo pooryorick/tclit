@@ -2,6 +2,7 @@
  * Copyright © 1998-2000 Ajuba Solutions
  * Copyright © 1995-1997 Sun Microsystems, Inc.
  * Contributions from Don Porter, NIST, 2014. (not subject to US copyright)
+ * Copyright © 2025 Nathan Coulter
  *
  * See the file "license.terms" for information on usage and redistribution of
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
@@ -26,6 +27,19 @@
 #include "tclInt.h"
 #include "tclIO.h"
 #include <assert.h>
+
+
+/*
+ * Used to notify that the channel is ready when the event source has already
+ * raised the notification that a channel is ready and isn't going to do it
+ * again.
+*/
+
+typedef struct ChannelEvent {
+    Tcl_Event event;
+    Channel *chanPtr;
+} ChannelEvent;
+
 
 /*
  * For each channel handler registered in a call to Tcl_CreateChannelHandler,
@@ -170,7 +184,8 @@ static void		PreserveChannelBuffer(ChannelBuffer *bufPtr);
 static void		ReleaseChannelBuffer(ChannelBuffer *bufPtr);
 static int		IsShared(ChannelBuffer *bufPtr);
 static void		ChannelFree(Channel *chanPtr);
-static void		ChannelTimerProc(void *clientData);
+static int		ChannelEventProc(Tcl_Event *eventPtr, int flags);
+static void		ChannelStateFree(Channel *chanPtr);
 static int		ChanRead(Channel *chanPtr, char *dst, int dstSize);
 static int		CheckChannelErrors(ChannelState *statePtr,
 			    int direction);
@@ -179,7 +194,6 @@ static int		CheckForDeadChannel(Tcl_Interp *interp,
 static void		CheckForStdChannelsBeingClosed(Tcl_Channel chan);
 static void		CleanupChannelHandlers(Tcl_Interp *interp,
 			    Channel *chanPtr);
-static void		CleanupTimerHandler(ChannelState *statePtr);
 static int		CloseChannel(Tcl_Interp *interp, Channel *chanPtr,
 			    int errorCode);
 static int		CloseChannelPart(Tcl_Interp *interp, Channel *chanPtr,
@@ -187,7 +201,6 @@ static int		CloseChannelPart(Tcl_Interp *interp, Channel *chanPtr,
 static int		CloseWrite(Tcl_Interp *interp, Channel *chanPtr);
 static void		CommonGetsCleanup(Channel *chanPtr);
 static int		CopyData(CopyState *csPtr, int mask);
-static void		DeleteTimerHandler(ChannelState *statePtr);
 static int		Lossless(ChannelState *inStatePtr,
 			    ChannelState *outStatePtr, long long toRead);
 static int		MoveBytes(CopyState *csPtr);
@@ -224,6 +237,7 @@ static Tcl_HashTable *	GetChannelTable(Tcl_Interp *interp);
 static int		GetInput(Channel *chanPtr);
 static void		PeekAhead(Channel *chanPtr, char **dstEndPtr,
 			    GetsState *gsPtr);
+static void		QueueChannelEvent(Channel *chanPtr);
 static int		ReadBytes(ChannelState *statePtr, Tcl_Obj *objPtr,
 			    int charsLeft);
 static int		ReadChars(ChannelState *statePtr, Tcl_Obj *objPtr,
@@ -642,7 +656,7 @@ TclFinalizeIOSubsystem(void)
 	 */
 
 	if (active) {
-	    TclChannelPreserve((Tcl_Channel)chanPtr);
+	    TclChannelIncrRefCount((Tcl_Channel)chanPtr);
 
 	    /*
 	     * TIP #398: by default, we no longer set the channel back into
@@ -704,7 +718,7 @@ TclFinalizeIOSubsystem(void)
 		chanPtr->instanceData = NULL;
 		SetFlag(statePtr, CHANNEL_DEAD);
 	    }
-	    TclChannelRelease((Tcl_Channel)chanPtr);
+	    TclChannelDecrRefCount((Tcl_Channel)chanPtr);
 	}
     }
 
@@ -1276,7 +1290,7 @@ Tcl_UnregisterChannel(
      */
 
     if (statePtr->refCount <= 0) {
-	Tcl_Preserve(statePtr);
+	TclChannelIncrRefCount(chan);
 	if (!GotFlag(statePtr, BG_FLUSH_SCHEDULED)) {
 	    /*
 	     * We don't want to re-enter Tcl_CloseEx().
@@ -1285,13 +1299,13 @@ Tcl_UnregisterChannel(
 	    if (!GotFlag(statePtr, CHANNEL_CLOSED)) {
 		if (Tcl_CloseEx(interp, chan, 0) != TCL_OK) {
 		    SetFlag(statePtr, CHANNEL_CLOSED);
-		    Tcl_Release(statePtr);
+		    TclChannelDecrRefCount(chan);
 		    return TCL_ERROR;
 		}
 	    }
 	}
 	SetFlag(statePtr, CHANNEL_CLOSED);
-	Tcl_Release(statePtr);
+	TclChannelDecrRefCount(chan);
     }
     return TCL_OK;
 }
@@ -1566,7 +1580,7 @@ TclGetChannelFromObj(
 
     if (resPtr && resPtr->refCount == 1) {
 	/* Re-use the ResolvedCmdName struct */
-	Tcl_Release(resPtr->statePtr);
+	TclChannelDecrRefCount((Tcl_Channel)resPtr->statePtr->bottomChanPtr);
 
     } else {
 	resPtr = (ResolvedChanName *) Tcl_Alloc(sizeof(ResolvedChanName));
@@ -1575,7 +1589,7 @@ TclGetChannelFromObj(
     }
     statePtr = ((Channel *)chan)->state;
     resPtr->statePtr = statePtr;
-    Tcl_Preserve(statePtr);
+    TclChannelIncrRefCount((Tcl_Channel)statePtr->bottomChanPtr);
     resPtr->interp = interp;
     resPtr->epoch = statePtr->epoch;
 
@@ -1715,8 +1729,7 @@ Tcl_CreateChannel(
     statePtr->interestMask	= 0;
     statePtr->scriptRecordPtr	= NULL;
     statePtr->bufSize		= CHANNELBUFFER_DEFAULT_SIZE;
-    statePtr->timer		= NULL;
-    statePtr->timerChanPtr	= NULL;
+    statePtr->eventQueued	= 0;
     statePtr->csPtrR		= NULL;
     statePtr->csPtrW		= NULL;
     statePtr->outputStage	= NULL;
@@ -1980,14 +1993,14 @@ Tcl_StackChannel(
 }
 
 void
-TclChannelPreserve(
+TclChannelIncrRefCount(
     Tcl_Channel chan)
 {
     ((Channel *)chan)->refCount++;
 }
 
 void
-TclChannelRelease(
+TclChannelDecrRefCount(
     Tcl_Channel chan)
 {
     Channel *chanPtr = (Channel *) chan;
@@ -1999,6 +2012,7 @@ TclChannelRelease(
 	return;
     }
     if (chanPtr->typePtr == NULL) {
+	ChannelStateFree(chanPtr);
 	Tcl_Free(chanPtr);
     }
 }
@@ -2008,11 +2022,54 @@ ChannelFree(
     Channel *chanPtr)
 {
     if (chanPtr->refCount == 0) {
+	ChannelStateFree(chanPtr);
 	Tcl_Free(chanPtr);
 	return;
     }
     chanPtr->typePtr = NULL;
 }
+
+
+static void
+ChannelStateFree(
+    Channel *chanPtr)
+{
+    ChannelState *statePtr = chanPtr->state;
+    if (chanPtr->state->bottomChanPtr == chanPtr) {
+	/*
+	 * Some resources can be cleared only if the bottom channel in a stack is
+	 * closed. All the other channels in the stack are not allowed to remove.
+	 */
+	if (statePtr->channelName != NULL) {
+	    Tcl_Free(statePtr->channelName);
+	    statePtr->channelName = NULL;
+	}
+
+	Tcl_FreeEncoding(statePtr->encoding);
+
+	/*
+	 * Even after close some members can be filled again (in events etc).
+	 * Test in bug [79474c588] illustrates one leak (on remaining chanMsg).
+	 * Possible other fields need freeing on some constellations.
+	 */
+
+	DiscardInputQueued(statePtr, 1);
+	if (statePtr->curOutPtr != NULL) {
+	    ReleaseChannelBuffer(statePtr->curOutPtr);
+	}
+	DiscardOutputQueued(statePtr);
+
+	if (statePtr->chanMsg) {
+	    Tcl_DecrRefCount(statePtr->chanMsg);
+	}
+	if (statePtr->unreportedMsg) {
+	    Tcl_DecrRefCount(statePtr->unreportedMsg);
+	}
+	Tcl_Free(statePtr);
+    }
+    return;
+}
+
 
 /*
  *----------------------------------------------------------------------
@@ -2812,7 +2869,7 @@ FlushChannel(
      * of the queued output to the channel.
      */
 
-    TclChannelPreserve((Tcl_Channel)chanPtr);
+    TclChannelIncrRefCount((Tcl_Channel)chanPtr);
     while (statePtr->outQueueHead) {
 	bufPtr = statePtr->outQueueHead;
 
@@ -3024,37 +3081,10 @@ FlushChannel(
     }
 
   done:
-    TclChannelRelease((Tcl_Channel)chanPtr);
+    TclChannelDecrRefCount((Tcl_Channel)chanPtr);
     return errorCode;
 }
-
-static void
-FreeChannelState(
-    void *blockPtr)		/* Channel state to free. */
-{
-    ChannelState *statePtr = (ChannelState *)blockPtr;
-    /*
-     * Even after close some members can be filled again (in events etc).
-     * Test in bug [79474c588] illustrates one leak (on remaining chanMsg).
-     * Possible other fields need freeing on some constellations.
-     */
 
-    DiscardInputQueued(statePtr, 1);
-    if (statePtr->curOutPtr != NULL) {
-	ReleaseChannelBuffer(statePtr->curOutPtr);
-    }
-    DiscardOutputQueued(statePtr);
-
-    DeleteTimerHandler(statePtr);
-
-    if (statePtr->chanMsg) {
-	Tcl_DecrRefCount(statePtr->chanMsg);
-    }
-    if (statePtr->unreportedMsg) {
-	Tcl_DecrRefCount(statePtr->unreportedMsg);
-    }
-    Tcl_Free(statePtr);
-}
 
 /*
  *----------------------------------------------------------------------
@@ -3146,20 +3176,6 @@ CloseChannel(
     result = ChanClose(chanPtr, interp);
 
     /*
-     * Some resources can be cleared only if the bottom channel in a stack is
-     * closed. All the other channels in the stack are not allowed to remove.
-     */
-
-    if (chanPtr == statePtr->bottomChanPtr) {
-	if (statePtr->channelName != NULL) {
-	    Tcl_Free(statePtr->channelName);
-	    statePtr->channelName = NULL;
-	}
-
-	Tcl_FreeEncoding(statePtr->encoding);
-    }
-
-    /*
      * If we are being called synchronously, report either any latent error on
      * the channel or the current error.
      */
@@ -3189,12 +3205,6 @@ CloseChannel(
     }
 
     /*
-     * Cancel any outstanding timer.
-     */
-
-    DeleteTimerHandler(statePtr);
-
-    /*
      * Mark the channel as deleted by clearing the type structure.
      */
 
@@ -3219,9 +3229,6 @@ CloseChannel(
      */
 
     ChannelFree(chanPtr);
-
-    Tcl_EventuallyFree(statePtr, FreeChannelState);
-
     return errorCode;
 }
 
@@ -3232,7 +3239,7 @@ CloseChannel(
  * CutChannel --
  *
  *	Removes a channel from the (thread-)global list of all channels (in
- *	that thread). This is actually the statePtr for the stack of channel.
+ *	that thread). This is actually the statePtr for the stack of channels.
  *
  * Results:
  *	Nothing.
@@ -3543,11 +3550,6 @@ TclClose(
     Tcl_ClearChannelHandlers(chan);
 
     /*
-     * Cancel any outstanding timer.
-     */
-    DeleteTimerHandler(statePtr);
-
-    /*
      * Invoke the registered close callbacks and delete their records.
      */
 
@@ -3737,7 +3739,7 @@ Tcl_CloseEx(
 
 	return CloseChannelPart(interp, chanPtr, 0, flags);
     } else if (flags & TCL_CLOSE_WRITE) {
-	Tcl_Preserve(statePtr);
+	TclChannelIncrRefCount((Tcl_Channel)chanPtr);
 	if (!GotFlag(statePtr, BG_FLUSH_SCHEDULED)) {
 	    /*
 	     * We don't want to re-enter CloseWrite().
@@ -3746,13 +3748,13 @@ Tcl_CloseEx(
 	    if (!GotFlag(statePtr, CHANNEL_CLOSEDWRITE)) {
 		if (CloseWrite(interp, chanPtr) != TCL_OK) {
 		    SetFlag(statePtr, CHANNEL_CLOSEDWRITE);
-		    Tcl_Release(statePtr);
+		    TclChannelDecrRefCount((Tcl_Channel)chanPtr);
 		    return TCL_ERROR;
 		}
 	    }
 	}
 	SetFlag(statePtr, CHANNEL_CLOSEDWRITE);
-	Tcl_Release(statePtr);
+	TclChannelDecrRefCount((Tcl_Channel)chanPtr);
     }
 
     return TCL_OK;
@@ -3994,12 +3996,6 @@ Tcl_ClearChannelHandlers(
     chanPtr = (Channel *) channel;
     statePtr = chanPtr->state;
     chanPtr = statePtr->topChanPtr;
-
-    /*
-     * Cancel any outstanding timer.
-     */
-
-    DeleteTimerHandler(statePtr);
 
     /*
      * Remove any references to channel handlers for this channel that may be
@@ -4683,7 +4679,7 @@ Tcl_GetsObj(
      */
 
     chanPtr = statePtr->topChanPtr;
-    TclChannelPreserve((Tcl_Channel)chanPtr);
+    TclChannelIncrRefCount((Tcl_Channel)chanPtr);
 
     bufPtr = statePtr->inQueueHead;
     encoding = statePtr->encoding;
@@ -4941,9 +4937,9 @@ Tcl_GetsObj(
      */
 
     if (chanPtr != statePtr->topChanPtr) {
-	TclChannelRelease((Tcl_Channel)chanPtr);
+	TclChannelDecrRefCount((Tcl_Channel)chanPtr);
 	chanPtr = statePtr->topChanPtr;
-	TclChannelPreserve((Tcl_Channel)chanPtr);
+	TclChannelIncrRefCount((Tcl_Channel)chanPtr);
     }
 
     bufPtr = gs.bufPtr;
@@ -4980,9 +4976,9 @@ Tcl_GetsObj(
      * self-modifying reflected transforms.
      */
     if (chanPtr != statePtr->topChanPtr) {
-	TclChannelRelease((Tcl_Channel)chanPtr);
+	TclChannelDecrRefCount((Tcl_Channel)chanPtr);
 	chanPtr = statePtr->topChanPtr;
-	TclChannelPreserve((Tcl_Channel)chanPtr);
+	TclChannelIncrRefCount((Tcl_Channel)chanPtr);
     }
     bufPtr = statePtr->inQueueHead;
     if (bufPtr != NULL) {
@@ -5031,12 +5027,12 @@ Tcl_GetsObj(
      */
 
     if (chanPtr != statePtr->topChanPtr) {
-	TclChannelRelease((Tcl_Channel)chanPtr);
+	TclChannelDecrRefCount((Tcl_Channel)chanPtr);
 	chanPtr = statePtr->topChanPtr;
-	TclChannelPreserve((Tcl_Channel)chanPtr);
+	TclChannelIncrRefCount((Tcl_Channel)chanPtr);
     }
     UpdateInterest(chanPtr);
-    TclChannelRelease((Tcl_Channel)chanPtr);
+    TclChannelDecrRefCount((Tcl_Channel)chanPtr);
     if (GotFlag(statePtr, CHANNEL_ENCODING_ERROR) && gs.bytesWrote == 0) {
 	bufPtr->nextRemoved = oldRemoved;
 	Tcl_SetErrno(EILSEQ);
@@ -5093,7 +5089,7 @@ TclGetsObjBinary(
      */
 
     chanPtr = statePtr->topChanPtr;
-    TclChannelPreserve((Tcl_Channel)chanPtr);
+    TclChannelIncrRefCount((Tcl_Channel)chanPtr);
 
     bufPtr = statePtr->inQueueHead;
 
@@ -5321,7 +5317,7 @@ TclGetsObjBinary(
     assert(!(GotFlag(statePtr, CHANNEL_EOF|CHANNEL_BLOCKED)
 	    == (CHANNEL_EOF|CHANNEL_BLOCKED)));
     UpdateInterest(chanPtr);
-    TclChannelRelease((Tcl_Channel)chanPtr);
+    TclChannelDecrRefCount((Tcl_Channel)chanPtr);
     return copiedTotal;
 }
 
@@ -6022,7 +6018,7 @@ DoReadChars(
      */
 
     chanPtr = statePtr->topChanPtr;
-    TclChannelPreserve((Tcl_Channel)chanPtr);
+    TclChannelIncrRefCount((Tcl_Channel)chanPtr);
 
     binaryMode = (encoding == GetBinaryEncoding())
 	    && (statePtr->inputTranslation == TCL_TRANSLATE_LF)
@@ -6098,9 +6094,9 @@ DoReadChars(
 	    }
 	    result = GetInput(chanPtr);
 	    if (chanPtr != statePtr->topChanPtr) {
-		TclChannelRelease((Tcl_Channel)chanPtr);
+		TclChannelDecrRefCount((Tcl_Channel)chanPtr);
 		chanPtr = statePtr->topChanPtr;
-		TclChannelPreserve((Tcl_Channel)chanPtr);
+		TclChannelIncrRefCount((Tcl_Channel)chanPtr);
 	    }
 	    if (result != 0) {
 		if (!GotFlag(statePtr, CHANNEL_BLOCKED)) {
@@ -6133,9 +6129,9 @@ finish:
      */
 
     if (chanPtr != statePtr->topChanPtr) {
-	TclChannelRelease((Tcl_Channel)chanPtr);
+	TclChannelDecrRefCount((Tcl_Channel)chanPtr);
 	chanPtr = statePtr->topChanPtr;
-	TclChannelPreserve((Tcl_Channel)chanPtr);
+	TclChannelIncrRefCount((Tcl_Channel)chanPtr);
     }
 
     /*
@@ -6161,7 +6157,7 @@ finish:
 	Tcl_SetErrno(EILSEQ);
 	copied = -1;
     }
-    TclChannelRelease((Tcl_Channel)chanPtr);
+    TclChannelDecrRefCount((Tcl_Channel)chanPtr);
     if (copied == TCL_INDEX_NONE) {
 	ResetFlag(statePtr, CHANNEL_ENCODING_ERROR|CHANNEL_EOF);
     }
@@ -8594,8 +8590,6 @@ Tcl_NotifyChannel(
 	chanPtr = upChanPtr;
     }
 
-    channel = (Tcl_Channel) chanPtr;
-
     /*
      * Here we have either reached the top of the stack or the mask is empty.
      * We break out of the procedure if it is the latter.
@@ -8612,8 +8606,7 @@ Tcl_NotifyChannel(
      * Preserve the channel struct in case the script closes it.
      */
 
-    TclChannelPreserve((Tcl_Channel)channel);
-    Tcl_Preserve(statePtr);
+    TclChannelIncrRefCount((Tcl_Channel)chanPtr);
 
     /*
      * Avoid processing if the channel owner has been changed.
@@ -8681,9 +8674,7 @@ Tcl_NotifyChannel(
     }
 
 done:
-    Tcl_Release(statePtr);
-    TclChannelRelease(channel);
-
+    TclChannelDecrRefCount((Tcl_Channel)chanPtr);
     tsdPtr->nestedHandlerPtr = nh.nestedHandlerPtr;
 }
 
@@ -8699,7 +8690,7 @@ done:
  *	None.
  *
  * Side effects:
- *	May schedule a timer or driver handler.
+ *	May enqueue a notification event.
  *
  *----------------------------------------------------------------------
  */
@@ -8728,9 +8719,8 @@ UpdateInterest(
 
     /*
      * If there is data in the input queue, and we aren't waiting for more
-     * data, then we need to schedule a timer so we don't block in the
-     * notifier. Also, cancel the read interest so we don't get duplicate
-     * events.
+     * data, queue a new event in order to not block in the notifier. Also,
+     * cancel the read interest to prevent duplicate events.
      */
 
     if (mask & TCL_READABLE) {
@@ -8779,27 +8769,22 @@ UpdateInterest(
 
 	    mask &= ~TCL_EXCEPTION;
 
-	    if (!statePtr->timer) {
-		TclChannelPreserve((Tcl_Channel)chanPtr);
-		statePtr->timerChanPtr = chanPtr;
-		statePtr->timer = Tcl_CreateTimerHandler(SYNTHETIC_EVENT_TIME,
-			ChannelTimerProc, chanPtr);
+	    if (!statePtr->eventQueued) {
+		QueueChannelEvent(chanPtr);
 	    }
 	}
     }
 
-    if (!statePtr->timer
-	    && (mask & TCL_WRITABLE)
-	    && GotFlag(statePtr, CHANNEL_NONBLOCKING)
-	    && ( statePtr->curOutPtr
-		&& !IsBufferEmpty(statePtr->curOutPtr)
-		&& !IsBufferFull(statePtr->curOutPtr)
-	    )
-	) {
-	    TclChannelPreserve((Tcl_Channel)chanPtr);
-	    statePtr->timerChanPtr = chanPtr;
-	    statePtr->timer = Tcl_CreateTimerHandler(SYNTHETIC_EVENT_TIME
-		,ChannelTimerProc ,chanPtr);
+    if (!statePtr->eventQueued
+	&& (mask & TCL_WRITABLE)
+	&& GotFlag(statePtr, CHANNEL_NONBLOCKING)
+	&& !GotFlag(statePtr, BG_FLUSH_SCHEDULED)
+	&& ( statePtr->curOutPtr
+	    && !IsBufferEmpty(statePtr->curOutPtr)
+	    && !IsBufferFull(statePtr->curOutPtr)
+	)
+    ) {
+	QueueChannelEvent(chanPtr);
     }
 
     ChanWatch(chanPtr, mask);
@@ -8808,7 +8793,37 @@ UpdateInterest(
 /*
  *----------------------------------------------------------------------
  *
- * ChannelTimerProc --
+ * QueueChannelEvent --
+ *
+ *	
+ *	
+ *
+ * Results:
+ *	
+ *
+ * Side effects:
+ *	
+ *
+ *----------------------------------------------------------------------
+ */
+ static void QueueChannelEvent(
+    Channel *chanPtr
+ ) {
+    ChannelEvent *chanEvPtr;
+    ChannelState *statePtr = chanPtr->state;
+    chanEvPtr = (ChannelEvent *)Tcl_Alloc(sizeof(ChannelEvent));
+    chanEvPtr->event.proc = ChannelEventProc;
+    TclChannelIncrRefCount((Tcl_Channel)chanPtr);
+    chanEvPtr->chanPtr = chanPtr;
+    Tcl_QueueEvent((Tcl_Event *)chanEvPtr, TCL_QUEUE_TAIL);
+    statePtr->eventQueued = 1;
+    return;
+ }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ChannelEventProc --
  *
  *	Timer handler scheduled by UpdateInterest to monitor the channel
  *	buffers until they are empty.
@@ -8822,80 +8837,57 @@ UpdateInterest(
  *----------------------------------------------------------------------
  */
 
-static void
-ChannelTimerProc(
-    void *clientData)
+static int
+ChannelEventProc(
+    Tcl_Event *eventPtr,
+    int flags)
 {
-    Channel *chanPtr = (Channel *)clientData;
+    Channel *chanPtr = ((ChannelEvent *)eventPtr)->chanPtr;
     /* State info for channel */
     ChannelState *statePtr = chanPtr->state;
     int notified = 0;
+    statePtr->eventQueued = 0;
 
-    if (chanPtr->typePtr == NULL) {
-	statePtr->timer = NULL;
-	TclChannelRelease((Tcl_Channel)statePtr->timerChanPtr);
-	statePtr->timerChanPtr = NULL;
-    } else {
+    if (chanPtr->typePtr != NULL) {
 	if (!GotFlag(statePtr, CHANNEL_NEED_MORE_DATA)
 		&& (statePtr->interestMask & TCL_READABLE)
 		&& (statePtr->inQueueHead != NULL)
 		&& IsBufferReady(statePtr->inQueueHead)) {
 	    /*
-	     * Restart the timer in case a channel handler reenters the event loop
-	     * before UpdateInterest gets called by Tcl_NotifyChannel.
+	     * Enqueue a notification event in case something reenters the
+	     * event loop before Tcl_NotifyChannel calls UpdateInterest.
 	     */
-	    statePtr->timer = Tcl_CreateTimerHandler(SYNTHETIC_EVENT_TIME,
-		ChannelTimerProc,chanPtr);
-
+	    QueueChannelEvent(chanPtr);
 	    Tcl_NotifyChannel((Tcl_Channel) chanPtr, TCL_READABLE);
 	    notified = 1;
-	} 
+	}
 
 	if (chanPtr->typePtr != NULL
 	    && statePtr->interestMask & TCL_WRITABLE
+	    && !GotFlag(statePtr, BG_FLUSH_SCHEDULED)
 	    && GotFlag(statePtr, CHANNEL_NONBLOCKING)
-	    && !GotFlag(statePtr, BG_FLUSH_SCHEDULED
 	    && ( statePtr->curOutPtr
 		&& !IsBufferEmpty(statePtr->curOutPtr)
 		&& !IsBufferFull(statePtr->curOutPtr)
 	    )
-	)) {
+	) {
 	    /*
-	     * Restart the timer in case a channel handler reenters the event loop
-	     * before UpdateInterest gets called by Tcl_NotifyChannel.
+	     * Enqueue a notification event in case something reenters the
+	     * event loop before Tcl_NotifyChannel calls UpdateInterest.
 	     */
-	    statePtr->timer = Tcl_CreateTimerHandler(SYNTHETIC_EVENT_TIME,
-		ChannelTimerProc,chanPtr);
+	    QueueChannelEvent(chanPtr);
 	    Tcl_NotifyChannel((Tcl_Channel) chanPtr, TCL_WRITABLE);
 	    notified = 1;
 	}
 
 	if (!notified) {
-	    statePtr->timer = NULL;
+	    statePtr->eventQueued = 0;
 	    UpdateInterest(chanPtr);
-	    /* Was set in UpdateInterest. */
-	    TclChannelRelease((Tcl_Channel)statePtr->timerChanPtr);
-	    statePtr->timerChanPtr = NULL;
 	}
     }
-}
-
-static void
-DeleteTimerHandler(
-    ChannelState *statePtr)
-{
-    if (statePtr->timer != NULL) {
-	Tcl_DeleteTimerHandler(statePtr->timer);
-	CleanupTimerHandler(statePtr);
-    }
-}
-static void
-CleanupTimerHandler(
-    ChannelState *statePtr)
-{
-    TclChannelRelease((Tcl_Channel)statePtr->timerChanPtr);
-    statePtr->timer = NULL;
-    statePtr->timerChanPtr = NULL;
+    /* Was set in QueueChannelEvent. */
+    TclChannelDecrRefCount((Tcl_Channel)chanPtr);
+    return 1;
 }
 
 /*
@@ -9233,7 +9225,7 @@ TclChannelEventScriptInvoker(
      */
 
     Tcl_Preserve(interp);
-    TclChannelPreserve((Tcl_Channel)chanPtr);
+    TclChannelIncrRefCount((Tcl_Channel)chanPtr);
     result = Tcl_EvalObjEx(interp, esPtr->scriptPtr, TCL_EVAL_GLOBAL);
 
     /*
@@ -9250,7 +9242,7 @@ TclChannelEventScriptInvoker(
 	}
 	Tcl_BackgroundException(interp, result);
     }
-    TclChannelRelease((Tcl_Channel)chanPtr);
+    TclChannelDecrRefCount((Tcl_Channel)chanPtr);
     Tcl_Release(interp);
 }
 
@@ -9495,8 +9487,8 @@ TclCopyChannel(
     }
     csPtr->cmdPtr = cmdPtr;
 
-    TclChannelPreserve(inChan);
-    TclChannelPreserve(outChan);
+    TclChannelIncrRefCount(inChan);
+    TclChannelIncrRefCount(outChan);
 
     inStatePtr->csPtrR = csPtr;
     outStatePtr->csPtrW = csPtr;
@@ -10180,7 +10172,7 @@ DoRead(
 	return 0;
     }
 
-    TclChannelPreserve((Tcl_Channel)chanPtr);
+    TclChannelIncrRefCount((Tcl_Channel)chanPtr);
     while (bytesToRead) {
 	/*
 	 * Each pass through the loop is intended to process up to one channel
@@ -10225,7 +10217,7 @@ DoRead(
 	  readErr:
 
 	    UpdateInterest(chanPtr);
-	    TclChannelRelease((Tcl_Channel)chanPtr);
+	    TclChannelDecrRefCount((Tcl_Channel)chanPtr);
 	    return -1;
 	}
 
@@ -10343,7 +10335,7 @@ DoRead(
     assert(!(GotFlag(statePtr, CHANNEL_EOF|CHANNEL_BLOCKED)
 	    == (CHANNEL_EOF|CHANNEL_BLOCKED)));
     UpdateInterest(chanPtr);
-    TclChannelRelease((Tcl_Channel)chanPtr);
+    TclChannelDecrRefCount((Tcl_Channel)chanPtr);
     return (Tcl_Size)(p - dst);
 }
 
@@ -10492,8 +10484,8 @@ CopyDecrRefCount(
 	return;
     }
 
-    TclChannelRelease((Tcl_Channel)csPtr->readPtr);
-    TclChannelRelease((Tcl_Channel)csPtr->writePtr);
+    TclChannelDecrRefCount((Tcl_Channel)csPtr->readPtr);
+    TclChannelDecrRefCount((Tcl_Channel)csPtr->writePtr);
 
     Tcl_Free(csPtr);
 }
@@ -11561,7 +11553,7 @@ FreeChannelInternalRep(
     if (resPtr->refCount-- > 1) {
 	return;
     }
-    Tcl_Release(resPtr->statePtr);
+    TclChannelDecrRefCount((Tcl_Channel)resPtr->statePtr->bottomChanPtr);
     Tcl_Free(resPtr);
 }
 

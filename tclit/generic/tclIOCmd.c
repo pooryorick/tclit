@@ -174,7 +174,7 @@ Tcl_PutsObjCmd(
 	return TCL_ERROR;
     }
 
-    TclChannelPreserve(chan);
+    TclChannelIncrRefCount(chan);
     result = Tcl_WriteObj(chan, string);
     if (result == TCL_INDEX_NONE) {
 	goto error;
@@ -185,7 +185,7 @@ Tcl_PutsObjCmd(
 	    goto error;
 	}
     }
-    TclChannelRelease(chan);
+    TclChannelDecrRefCount(chan);
     return TCL_OK;
 
     /*
@@ -200,7 +200,7 @@ Tcl_PutsObjCmd(
 	Tcl_SetObjResult(interp, Tcl_ObjPrintf("error writing \"%s\": %s",
 		TclGetString(chanObjPtr), Tcl_PosixError(interp)));
     }
-    TclChannelRelease(chan);
+    TclChannelDecrRefCount(chan);
     return TCL_ERROR;
 }
 
@@ -247,7 +247,7 @@ Tcl_FlushObjCmd(
 	return TCL_ERROR;
     }
 
-    TclChannelPreserve(chan);
+    TclChannelIncrRefCount(chan);
     if (Tcl_Flush(chan) != TCL_OK) {
 	/*
 	 * TIP #219.
@@ -261,10 +261,10 @@ Tcl_FlushObjCmd(
 		    "error flushing \"%s\": %s",
 		    TclGetString(chanObjPtr), Tcl_PosixError(interp)));
 	}
-	TclChannelRelease(chan);
+	TclChannelDecrRefCount(chan);
 	return TCL_ERROR;
     }
-    TclChannelRelease(chan);
+    TclChannelDecrRefCount(chan);
     return TCL_OK;
 }
 
@@ -313,7 +313,7 @@ Tcl_GetsObjCmd(
 	return TCL_ERROR;
     }
 
-    TclChannelPreserve(chan);
+    TclChannelIncrRefCount(chan);
     TclNewObj(linePtr);
     lineLen = Tcl_GetsObj(chan, linePtr);
     if (lineLen == TCL_IO_FAILURE) {
@@ -349,7 +349,7 @@ Tcl_GetsObjCmd(
 	Tcl_SetObjResult(interp, linePtr);
     }
   done:
-    TclChannelRelease(chan);
+    TclChannelDecrRefCount(chan);
     return code;
 }
 
@@ -442,7 +442,7 @@ Tcl_ReadObjCmd(
     }
 
     TclNewObj(resultPtr);
-    TclChannelPreserve(chan);
+    TclChannelIncrRefCount(chan);
     charactersRead = Tcl_ReadChars(chan, resultPtr, toRead, 0);
     if (charactersRead == TCL_IO_FAILURE) {
 	/*
@@ -469,7 +469,7 @@ Tcl_ReadObjCmd(
 	} else {
 		Tcl_DecrRefCount(resultPtr);
 	}
-	TclChannelRelease(chan);
+	TclChannelDecrRefCount(chan);
 	return TCL_ERROR;
    }
 
@@ -487,7 +487,7 @@ Tcl_ReadObjCmd(
 	}
     }
     Tcl_SetObjResult(interp, resultPtr);
-    TclChannelRelease(chan);
+    TclChannelDecrRefCount(chan);
     return TCL_OK;
 }
 
@@ -545,7 +545,7 @@ Tcl_SeekObjCmd(
 	mode = modeArray[optionIndex];
     }
 
-    TclChannelPreserve(chan);
+    TclChannelIncrRefCount(chan);
     result = Tcl_Seek(chan, offset, mode);
     if (result == -1) {
 	/*
@@ -560,10 +560,10 @@ Tcl_SeekObjCmd(
 		    "error during seek on \"%s\": %s",
 		    TclGetString(objv[1]), Tcl_PosixError(interp)));
 	}
-	TclChannelRelease(chan);
+	TclChannelDecrRefCount(chan);
 	return TCL_ERROR;
     }
-    TclChannelRelease(chan);
+    TclChannelDecrRefCount(chan);
     return TCL_OK;
 }
 
@@ -609,7 +609,7 @@ Tcl_TellObjCmd(
 	return TCL_ERROR;
     }
 
-    TclChannelPreserve(chan);
+    TclChannelIncrRefCount(chan);
     newLoc = Tcl_Tell(chan);
 
     /*
@@ -619,7 +619,7 @@ Tcl_TellObjCmd(
      */
 
     code  = TclChanCaughtErrorBypass(interp, chan);
-    TclChannelRelease(chan);
+    TclChannelDecrRefCount(chan);
     if (code) {
 	return TCL_ERROR;
     }

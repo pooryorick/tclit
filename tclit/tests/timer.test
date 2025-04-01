@@ -176,7 +176,13 @@ test timer-4.2 {Tcl_CancelIdleCall procedure} -setup {
     list $x $y $z
 } -result {before after2 after3}
 
-test timer-5.1 {Tcl_ServiceIdle, self-rescheduling handlers} -setup {
+test timer-5.1 {
+    Tcl_ServiceIdle, self-rescheduling handlers
+
+    2025 04 01
+	Adjust test because there is no guarantee that more than one idle task
+	will be processed before vwait returns
+} -setup {
     foreach i [after info] {
 	after cancel $i
     }
@@ -186,9 +192,9 @@ test timer-5.1 {Tcl_ServiceIdle, self-rescheduling handlers} -setup {
     after idle {incr x; after idle {incr x; after idle {incr x}}}
     after idle {incr y}
     vwait x
-    set result "$x $y"
+    set result $x
     update idletasks
-    lappend result $x
+    lappend result $y $x
 } -result {2 24 4}
 
 test timer-6.1 {Tcl_AfterCmd procedure, basics} -returnCodes error -body {

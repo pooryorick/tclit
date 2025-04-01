@@ -3274,8 +3274,8 @@ MODULE_SCOPE int	TclByteArrayMatch(const unsigned char *string,
 			    Tcl_Size strLen, const unsigned char *pattern,
 			    Tcl_Size ptnLen, int flags);
 MODULE_SCOPE double	TclCeil(const void *a);
-MODULE_SCOPE void	TclChannelPreserve(Tcl_Channel chan);
-MODULE_SCOPE void	TclChannelRelease(Tcl_Channel chan);
+MODULE_SCOPE void	TclChannelIncrRefCount(Tcl_Channel chan);
+MODULE_SCOPE void	TclChannelDecrRefCount(Tcl_Channel chan);
 MODULE_SCOPE int	TclChannelGetBlockingMode(Tcl_Channel chan);
 MODULE_SCOPE int	TclCheckArrayTraces(Tcl_Interp *interp, Var *varPtr,
 			    Var *arrayPtr, Tcl_Obj *name, int index);

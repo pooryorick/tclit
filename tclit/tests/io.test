@@ -6353,6 +6353,12 @@ test io-44.7 {
 	    list finalize initialize seek watch write
 	}
 
+	proc post {chan action} {
+	    if {$chan in [chan names]} {
+		chan postevent $chan $action
+	    }
+	}
+
 	proc watch {chan args} {
 	    namespace upvar c_$chan watching watching
 	    foreach arg $args {
@@ -6361,7 +6367,8 @@ test io-44.7 {
 			if {$arg ni $watching} {
 			    lappend watching $arg
 			}
-			after idle after 0 chan postevent $chan $arg
+			after idle after 0 [
+			    list [namespace which post] $chan $arg]
 		    }
 		}
 	    }
@@ -6369,7 +6376,8 @@ test io-44.7 {
 
 	proc write {chan args} {
 	    incr ::counter
-	    after idle after 0 chan postevent $chan write
+	    after idle after 0 [
+		list [namespace which post] $chan write]
 	    return 1
 	}
     }
@@ -6388,10 +6396,8 @@ test io-44.7 {
 		variable count
 		variable x
 		if {[incr count] < 1000} {
-		    puts [list bleeble $count]xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 		    try $script
 		} else {
-		puts doone!
 		    set x done
 		}
 	    } [namespace current]] $script]

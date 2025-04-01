@@ -68,6 +68,12 @@ typedef struct ThreadSpecificData {
     Tcl_Event *lastEventPtr;	/* Last pending event, or NULL if none. */
     Tcl_Event *markerEventPtr;	/* Last high-priority event in queue, or NULL
 				 * if none. */
+    Tcl_Event *roundDelimPtr;   /* The last event after polling the event
+				 * sources.  When this event is processed the
+				 * event sources are polled again. */
+    int roundFinished;		/* 1 indicates that the last event in the round
+				 * has been processed, and that it is time to
+				 * poll event sources again. */
     Tcl_Mutex queueMutex;	/* Mutex to protect access to the previous
 				 * three fields. */
     int serviceMode;		/* One of TCL_SERVICE_NONE or
@@ -146,6 +152,8 @@ TclInitNotifier(void)
 
 	tsdPtr = TCL_TSD_INIT(&dataKey);
 	tsdPtr->threadId = threadId;
+	tsdPtr->roundDelimPtr = NULL;
+	tsdPtr->roundFinished = 0;
 	tsdPtr->clientData = Tcl_InitNotifier();
 	tsdPtr->initialized = 1;
 	tsdPtr->nextPtr = firstNotifierPtr;
@@ -543,6 +551,10 @@ QueueEvent(
 	    tsdPtr->lastEventPtr = evPtr;
 	}
     }
+    if (!tsdPtr->roundDelimPtr) {
+	tsdPtr->roundDelimPtr = tsdPtr->lastEventPtr;
+	tsdPtr->roundFinished = 0;
+    }
     Tcl_MutexUnlock(&(tsdPtr->queueMutex));
     return position & TCL_QUEUE_ALERT_IF_EMPTY;
 }
@@ -608,6 +620,10 @@ Tcl_DeleteEvents(
 	    }
 	    if (tsdPtr->markerEventPtr == evPtr) {
 		tsdPtr->markerEventPtr = prevPtr;
+	    }
+	    if (tsdPtr->roundDelimPtr == evPtr) {
+		tsdPtr->roundDelimPtr = prevPtr;
+		tsdPtr->roundFinished = 0;
 	    }
 
 	    /*
@@ -735,6 +751,10 @@ Tcl_ServiceEvent(
 	    /*
 	     * The event was processed, so remove it from the queue.
 	     */
+	    if (evPtr == tsdPtr->roundDelimPtr) {
+		tsdPtr->roundDelimPtr = NULL;
+		tsdPtr->roundFinished = 1;
+	    }
 
 	    tsdPtr->serviceCount++;
 
@@ -963,7 +983,7 @@ Tcl_DoOneEvent(
 	 * Ask Tcl to service a queued event, if there are any.
 	 */
 
-	if (Tcl_ServiceEvent(flags)) {
+	if (!tsdPtr->roundFinished && Tcl_ServiceEvent(flags)) {
 	    result = 1;
 	    break;
 	}
@@ -973,7 +993,10 @@ Tcl_DoOneEvent(
 	 * otherwise reset the block time to infinity.
 	 */
 
-	if (flags & TCL_DONT_WAIT) {
+	if (flags & TCL_DONT_WAIT || (
+	    /* the round must be finished but the queue is not empty */
+	    tsdPtr->firstEventPtr != NULL
+	)) {
 	    tsdPtr->blockTime.sec = 0;
 	    tsdPtr->blockTime.usec = 0;
 	    tsdPtr->blockTimeSet = 1;
@@ -1020,6 +1043,14 @@ Tcl_DoOneEvent(
 		sourcePtr = sourcePtr->nextPtr) {
 	    if (sourcePtr->checkProc) {
 		sourcePtr->checkProc(sourcePtr->clientData, flags);
+	    }
+	}
+
+	tsdPtr->roundDelimPtr = tsdPtr->lastEventPtr;
+	if (tsdPtr->roundFinished) {
+	    tsdPtr->roundFinished = 0;
+	    if (TclDoOneIdle()) {
+		return 1;
 	    }
 	}
 
