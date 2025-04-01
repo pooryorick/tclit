@@ -2385,7 +2385,7 @@ Tcl_LassignObjCmd(
 	Tcl_Size fromIdx = origListObjc - listObjc;
 	Tcl_Size toIdx = origListObjc - 1;
 	if (TclObjectHasInterface(listPtr, list, range)) {
-		TclObjectDispatchNoDefault(interp, status, listPtr, list, range,
+		status = TclObjectInterfaceCall(listPtr, list, range,
 			interp, listPtr, fromIdx, toIdx, &resultPtr);
 	    if (status != TCL_OK) {
 		return TCL_ERROR;

@@ -4829,7 +4829,7 @@ TEBCresume(
 	{
 	    index = TclIndexDecodeFromEnd(opnd);
 	    DECACHE_STACK_INFO();
-	    TclObjectDispatchNoDefault(interp, status, valuePtr, list,
+	    status = TclObjectInterfaceCall(valuePtr, list,
 		indexEnd, interp, valuePtr, index, &objResultPtr);
 	    CACHE_STACK_INFO();
 	    if (status) {
@@ -4844,7 +4844,7 @@ TEBCresume(
 	} else if (TclObjectHasInterface(valuePtr, list, length)
 	    && TclObjectHasInterface(valuePtr ,list ,index))
 	{
-	    TclObjectDispatchNoDefault(interp, status, valuePtr, list,
+	    status = TclObjectInterfaceCall(valuePtr, list,
 		length, interp, valuePtr, &length);
 
 	    /* Decode end-offset index values. */
@@ -4861,7 +4861,7 @@ TEBCresume(
 		TclNewObj(objResultPtr);
 	    } else {
 		DECACHE_STACK_INFO();
-		TclObjectDispatchNoDefault(interp, status, valuePtr, list,
+		status = TclObjectInterfaceCall(valuePtr, list,
 		    index, interp, valuePtr, index, &objResultPtr);
 		CACHE_STACK_INFO();
 		if (status) {

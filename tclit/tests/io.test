@@ -6332,9 +6332,11 @@ test io-44.6 {
 
 
 test io-44.7 {
-    FileEventProc procedure: write-only non-blocking channel postevent idle
+    FileEventProc procedure: write-only non-blocking channel postevent idle.
+    Internal scheduling of additional events should not block processing of
+    idle events.  
 
-	ac7592e73c10
+    See [ac7592e73c10]
 } -setup {
 } -constraints {stdio fileevent} -body {
 

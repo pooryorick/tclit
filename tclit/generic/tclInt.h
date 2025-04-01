@@ -261,20 +261,23 @@ typedef struct ObjectType {
 
 #define TclObjectDispatchNoDefault(interp, res, objPtr, iface, proc, ...)   \
     (TclObjectHasInterface((objPtr), iface, proc)			    \
-    ? ((res) = TclObjectInterfaceCall((objPtr), iface, proc, __VA_ARGS__),  \
-	TCL_OK)   \
-    : (Tcl_SetObjResult((interp),					    \
+	? ((res) = TclObjectInterfaceCall(				    \
+	    (objPtr), iface, proc, __VA_ARGS__)				    \
+	    ,TCL_OK)							    \
+	: (Tcl_SetObjResult((interp),					    \
 	    Tcl_ObjPrintf("interface error interface %s proc %s\n%s"	    \
-		, #iface, #proc,					    \
-		    Tcl_GetStringFromObj(				    \
-			Tcl_GetObjResult(interp) ,NULL))), TCL_ERROR))
+	    ,#iface, #proc,						    \
+		Tcl_GetStringFromObj(					    \
+		Tcl_GetObjResult(interp) ,NULL)))			    \
+	    ,(res) = TCL_ERROR, TCL_ERROR)				    \
+    )
 
 
-#define TclObjectHasInterface(objPtr, iface, proc)  \
-    ( \
-	(objPtr)->typePtr != NULL			    \
-	&&TclObjInterface(objPtr) != NULL	    \
-	&& TclObjInterface(objPtr)->iface.proc != NULL \
+#define TclObjectHasInterface(objPtr, iface, proc)			    \
+    (									    \
+	(objPtr)->typePtr != NULL					    \
+	&&TclObjInterface(objPtr) != NULL				    \
+	&& TclObjInterface(objPtr)->iface.proc != NULL			    \
     )
 
 /*
