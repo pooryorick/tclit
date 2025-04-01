@@ -1170,7 +1170,10 @@ Tcl_ServiceAll(void)
 	}
     }
 
-    while (Tcl_ServiceEvent(0)) {
+    tsdPtr->roundDelimPtr = tsdPtr->lastEventPtr;
+    tsdPtr->roundFinished = 0;
+
+    while (!tsdPtr->roundFinished && Tcl_ServiceEvent(0)) {
 	result = 1;
     }
     if (TclServiceIdle()) {
