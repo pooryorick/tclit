@@ -47,7 +47,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: unchained/unix
+        working-directory: tclit/unix
     steps:
       - name: Checkout
         uses: actions/checkout@v4

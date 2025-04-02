@@ -17,7 +17,7 @@ jobs:
     defaults:
       run:
         shell: powershell
-        working-directory: unchained/win
+        working-directory: tclit/win
     strategy:
       matrix:
         config:
@@ -61,7 +61,7 @@ jobs:
     defaults:
       run:
         shell: msys2 {0}
-        working-directory: unchained/win
+        working-directory: tclit/win
     strategy:
       matrix:
         config:
@@ -86,7 +86,7 @@ jobs:
         run: |
           touch tclStubInit.c tclOOStubInit.c tclOOScript.h
           mkdir "${HOME}/install dir"
-        working-directory: unchained/generic
+        working-directory: tclit/generic
       - name: Configure ${{ matrix.config }}
         run: |
           ./configure ${CFGOPT} "--prefix=$HOME/install dir" || (cat config.log && exit 1)

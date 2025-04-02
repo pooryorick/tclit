@@ -27,7 +27,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: unchained/unix
+        working-directory: tclit/unix
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
       - name: Prepare
         run: |
           touch tclStubInit.c tclOOStubInit.c tclOOScript.h
-        working-directory: unchained/generic
+        working-directory: tclit/generic
       - name: Configure ${{ matrix.config }}
         run: |
           mkdir "${HOME}/install dir"

@@ -24,22 +24,22 @@ jobs:
           touch generic/tclStubInit.c generic/tclOOStubInit.c
           mkdir 1dist
           echo "VER_PATH=$(cd tools; pwd)/addVerToFile.tcl" >> $GITHUB_ENV
-        working-directory: unchained/.
+        working-directory: tclit/.
       - name: Configure
         run: ./configure --disable-symbols --disable-shared --enable-zipfs
-        working-directory: unchained/unix
+        working-directory: tclit/unix
       - name: Build
         run: |
           make tclsh
           make shell SCRIPT="$VER_PATH $GITHUB_ENV"
           echo "TCL_ZIP=`pwd`/`echo libtcl*.zip`" >> $GITHUB_ENV
-        working-directory: unchained/unix
+        working-directory: tclit/unix
       - name: Package
         run: |
           cp ../unix/tclsh tclsh${TCL_PATCHLEVEL}_snapshot
           chmod +x tclsh${TCL_PATCHLEVEL}_snapshot
           tar -cf tclsh${TCL_PATCHLEVEL}_snapshot.tar tclsh${TCL_PATCHLEVEL}_snapshot
-        working-directory: unchained/1dist
+        working-directory: tclit/1dist
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
@@ -73,14 +73,14 @@ jobs:
           echo "CFLAGS=-arch x86_64 -arch arm64" >> $GITHUB_ENV
       - name: Configure
         run: ./configure --disable-symbols --disable-shared --enable-zipfs
-        working-directory: unchained/unix
+        working-directory: tclit/unix
       - name: Build
         run: |
           make tclsh
           make shell SCRIPT="$VER_PATH $GITHUB_ENV"
           echo "TCL_BIN=`pwd`/tclsh" >> $GITHUB_ENV
           echo "TCL_ZIP=`pwd`/`echo libtcl*.zip`" >> $GITHUB_ENV
-        working-directory: unchained/unix
+        working-directory: tclit/unix
       - name: Package
         run: |
           mkdir contents
@@ -102,7 +102,7 @@ jobs:
               --window-size 800 400 \
               "Tcl-$TCL_PATCHLEVEL-(snapshot).dmg" \
               "contents/"
-        working-directory: unchained/1dist
+        working-directory: tclit/1dist
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
@@ -131,25 +131,25 @@ jobs:
           touch generic/tclStubInit.c generic/tclOOStubInit.c
           echo "VER_PATH=$(cd tools; pwd)/addVerToFile.tcl" >> $GITHUB_ENV
           mkdir 1dist
-        working-directory: ./unchained
+        working-directory: ./tclit
       - name: Configure
         run: ./configure $CFGOPT
-        working-directory: unchained/win
+        working-directory: tclit/win
       - name: Build
         run: |
           make binaries libraries
           echo "TCL_ZIP=`pwd`/`echo libtcl*.zip`" >> $GITHUB_ENV
-        working-directory: unchained/win
+        working-directory: tclit/win
       - name: Get Exact Version
         run: |
           ./tclsh*.exe $VER_PATH $GITHUB_ENV
-        working-directory: unchained/win
+        working-directory: tclit/win
       - name: Set Executable Name
         run: |
           cp ../win/tclsh*.exe tclsh${TCL_PATCHLEVEL}_snapshot.exe
-        working-directory: unchained/1dist
+        working-directory: tclit/1dist
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: Tclsh ${{ env.TCL_PATCHLEVEL }} Windows single-file build (snapshot)
-          path: 'unchained/1dist/*_snapshot.exe'
+          path: 'tclit/1dist/*_snapshot.exe'
