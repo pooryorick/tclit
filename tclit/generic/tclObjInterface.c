@@ -35,6 +35,7 @@ Tcl_NewObjType(
 ) {
 	ObjectType *objTypePtr;
 	objTypePtr = (ObjectType *)Tcl_Alloc(sizeof(ObjectType));
+	memset(objTypePtr, 0, sizeof(ObjectType));
 	return (Tcl_ObjType *)objTypePtr;
 }
 
