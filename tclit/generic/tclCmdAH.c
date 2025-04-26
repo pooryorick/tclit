@@ -2845,7 +2845,9 @@ EachloopCmd(
 	    &statePtr->varcList[i], &statePtr->varvList[i]);
 
 	/* Values */
-	if (TclObjectHasInterface(objv[2+i*2], list, length)) {
+	if (TclObjectHasInterface(objv[2+i*2], list, length)
+	    && (TclObjectHasInterface(objv[2+i*2], list, index))
+	) {
 	    int status;
 	    statePtr->aCopyList[i] = Tcl_DuplicateObj(objv[2+i*2]);
 	    Tcl_IncrRefCount(statePtr->aCopyList[i]);
@@ -2853,7 +2855,11 @@ EachloopCmd(
 		result = TCL_ERROR;
 		goto done;
 	    }
-	    /* Don't compute values here, wait until the last moment */
+	    /*
+		Don't compute values here, wait until the last moment.
+		ForeachAssignments() will use the "list index" interface to
+		obtain items.
+	    */
 	    TclObjectDispatchNoDefault(interp, status, statePtr->aCopyList[i], list,
 		length, interp, statePtr->aCopyList[i], &statePtr->argcList[i]);
 	    if (status != TCL_OK) {

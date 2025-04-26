@@ -638,6 +638,8 @@ typedef struct Tcl_ObjType {
     size_t version;		/* Version field for future-proofing. */
 } Tcl_ObjType;
 
+#define TCL_OBJTYPE_V0 0
+
 
 /*
  * The following structure stores an internal representation (internalrep) for

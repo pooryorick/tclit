@@ -4339,4 +4339,8 @@ extern const TclStubs *tclStubsPtr;
 #undef TclUtfNext
 #undef TclUtfPrev
 
+#define Tcl_CreateSlave Tcl_CreateChild
+#define Tcl_GetSlave Tcl_GetChild
+#define Tcl_GetMaster Tcl_GetParent
+
 #endif /* _TCLDECLS */
