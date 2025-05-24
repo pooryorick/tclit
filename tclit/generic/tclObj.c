@@ -1614,14 +1614,6 @@ TclObjBeingDeleted(
  *	Create and return a new object that is a duplicate of the argument
  *	object.
  *
- * TclDuplicatePureObj --
- *	Like Tcl_DuplicateObj, except that it converts the duplicate to the
- *	specifid typ, does not duplicate the 'bytes'
- *	field unless it is necessary, i.e. the duplicated Tcl_Obj provides no
- *	updateStringProc.  This can avoid an expensive memory allocation since
- *	the data in the 'bytes' field of each Tcl_Obj must reside in allocated
- *	memory.
- *
  * Results:
  *	The return value is a pointer to a newly created Tcl_Obj. This object
  *	has reference count 0 and the same type, if any, as the source object
@@ -1680,16 +1672,21 @@ Tcl_DuplicateObj(
  * TclDuplicatePureObj --
  *
  *	Duplicates a Tcl_Obj and converts the internal representation of the
- *	duplicate to the given type, changing neither the 'bytes' field
- *	nor the internal representation of the original object, and without
- *	duplicating the bytes field unless necessary, i.e. unless the
- *	duplicate provides no updateStringProc after conversion.  This can
- *	avoid an expensive memory allocation since the data in the 'bytes'
- *	field of each Tcl_Obj must reside in allocated memory.
+ *	duplicate to the given type without changing the 'bytes' field or the
+ *	internal representation of the original object, and without duplicating the
+ *	bytes field unless necessary, i.e. unless the new duplicate provides no
+ *	updateStringProc().  This avoids a memory allocation when the TclObj.bytes
+ *	is not needed in the duplicate.
+ *	
+ *	Because the string representation is not preserved in the duplicate object,
+ *	TclDuplicatePureObj() is only suitable where the original value is not
+ *	required, as generating the string representation from the internal
+ *	representation might result in a string representation that is different
+ *	from that of the original.
  *
  * Results:
- *	A pointer to a newly-created Tcl_Obj or NULL if there was an error.
- *	This object has reference count 0.  Also:
+ *	A pointer to a newly-created Tcl_Obj with a reference count of zero, or
+ *	NULL if there was an error.
  *
  *----------------------------------------------------------------------
  */
