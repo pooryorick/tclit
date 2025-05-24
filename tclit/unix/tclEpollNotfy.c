@@ -239,6 +239,7 @@ PlatformEventsControl(
 
    if (epoll_ctl(tsdPtr->eventsFd, op, filePtr->fd, &newEvent) == -1) {
 	switch (errno) {
+	case ENOENT:
 	case EPERM:
 	    switch (op) {
 	    case EPOLL_CTL_ADD:
