@@ -1704,6 +1704,16 @@ int SetDuplicatePureObj(
     TclInvalidateStringRep(dupPtr);
     assert(dupPtr->typePtr == NULL);
 
+    if (objPtr->bytes != NULL && (
+	objPtr->typePtr && objPtr->typePtr->updateStringProc == NULL)
+    ) {
+	/*
+	    The only way to get a string representation for this object is to
+	    copy the original string representation, so do it now.
+	*/
+	TclInitStringRep(dupPtr, objPtr->bytes, (objPtr)->length);
+    }
+
     if (objPtr->typePtr && objPtr->typePtr->dupIntRepProc) {
 	objPtr->typePtr->dupIntRepProc(objPtr, dupPtr);
     } else {
@@ -1727,11 +1737,12 @@ int SetDuplicatePureObj(
 	}
     }
 
-    /* tclStringType is treated as a special case because a Tcl_Obj having this
-     * type can not always update the string representation.  This happens, for
-     * example, when Tcl_GetCharLength() converts the internal representation
-     * to tclStringType in order to store the number of characters, but does
-     * not store enough information to generate the string representation.
+    /* tclStringType is treated as a special case because the internal
+     * representation of a Tcl_Obj having this type may not be operational
+     * enough to update the string representation.  This happens, for example,
+     * when Tcl_GetCharLength() converts the internal representation to
+     * tclStringType in order to store the number of characters, but does not
+     * store enough information to generate the string representation.
      *
      * Perhaps in the future this can be remedied and this special treatment
      * removed.
