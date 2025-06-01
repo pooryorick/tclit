@@ -51,6 +51,9 @@ typedef struct FileHandler {
     int readyMask;		/* Mask of events that have been seen since
 				 * the last time file handlers were invoked
 				 * for this file. */
+    int inReadyList;		/* indicates whether file is currently in the
+				   firstReadyFileHandlerPtr list
+				*/
     Tcl_FileProc *proc;		/* Function to call, in the style of
 				 * Tcl_CreateFileHandler. */
     void *clientData;		/* Argument to pass to proc. */
@@ -226,29 +229,51 @@ PlatformEventsControl(
     }
     newEvent.data.ptr = filePtr->pedPtr;
 
-    /*
-     * N.B. As discussed in Tcl_WaitForEvent(), epoll(7) does not support
-     * regular files (S_IFREG). Therefore, filePtr is in these cases simply
-     * added or deleted from the list of FileHandlers associated with regular
-     * files belonging to tsdPtr.
-     */
-
-    if (TclOSfstat(filePtr->fd, &fdStat) == -1) {
-	Tcl_Panic("fstat: %s", strerror(errno));
+    if (filePtr->inReadyList) {
+	switch (op) {
+	    case EPOLL_CTL_DEL:
+		if (filePtr->inReadyList) {
+		    LIST_REMOVE(filePtr, readyNode);
+		    filePtr ->inReadyList = 0;
+		    return;
+		}
+		break;
+	    case EPOLL_CTL_MOD:
+		/*
+		    nothing to do in this case since the file is already
+		    handled as a file that is always ready
+		*/
+		return;
+		break;
+	}
     }
+
 
    if (epoll_ctl(tsdPtr->eventsFd, op, filePtr->fd, &newEvent) == -1) {
 	switch (errno) {
 	case EPERM:
+	    /*
+	     * As discussed in TclpWaitForEvent(), epoll(7), this is a regular
+	     * file (S_IFREG) or some other unsupported file. Therefore,
+	     * filePtr is in these cases simply added or deleted from the list
+	     * of FileHandlers associated with files belonging to tsdPtr.
+	     */
 	    switch (op) {
 	    case EPOLL_CTL_ADD:
 		if (isNew) {
 		    LIST_INSERT_HEAD(&tsdPtr->firstReadyFileHandlerPtr,
 			    filePtr, readyNode);
+		    filePtr->inReadyList = 1;
 		}
 		break;
 	    case EPOLL_CTL_DEL:
-		LIST_REMOVE(filePtr, readyNode);
+		Tcl_Panic("epoll_ctl EPOLL_CTL_DEL: %s", strerror(errno));
+		break;
+	    case EPOLL_CTL_MOD:
+		Tcl_Panic("epoll_ctl EPOLL_CTL_MOD: %s", strerror(errno));
+		break;
+	    default:
+		Tcl_Panic("epoll_ctl: %s", strerror(errno));
 		break;
 	    }
 	    break;
@@ -358,6 +383,7 @@ PlatformEventsInit(void)
 	Tcl_Panic("Tcl_InitNotifier: %s", "could not create mutex");
     }
     filePtr = (FileHandler *) Tcl_Alloc(sizeof(FileHandler));
+    filePtr->inReadyList = 0;
 #ifdef HAVE_EVENTFD
     tsdPtr->triggerEventFd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
     if (tsdPtr->triggerEventFd <= 0) {
@@ -533,6 +559,7 @@ TclpCreateFileHandler(
 	filePtr = (FileHandler *) Tcl_Alloc(sizeof(FileHandler));
 	filePtr->fd = fd;
 	filePtr->readyMask = 0;
+	filePtr->inReadyList = 0;
 	filePtr->nextPtr = tsdPtr->firstFileHandlerPtr;
 	tsdPtr->firstFileHandlerPtr = filePtr;
     }
