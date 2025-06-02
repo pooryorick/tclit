@@ -1,5 +1,7 @@
 #! /usr/bin/env tclsh
 
+# Copyright © 2025 Nathan Coulter
+
 # You may distribute and/or modify this program under the terms of the GNU
 # Affero General Public License as published by the Free Software Foundation,
 # either version 3 of the License, or (at your option) any later version.
@@ -12,6 +14,7 @@ if {[package provide tcltests] ne {}} return
 
 package require tcltest 2.5
 namespace import ::tcltest::*
+configure -tmpdir [file tempdir]
 testConstraint exec [llength [info commands exec]]
 testConstraint debug [tcl::build-info debug]
 testConstraint purify [tcl::build-info purify]
@@ -30,6 +33,8 @@ testConstraint fcopy         [llength [info commands fcopy]]
 testConstraint fileevent     [llength [info commands fileevent]]
 testConstraint thread        [expr {![catch {package require Thread 2.7-}]}]
 testConstraint notValgrind   [expr {![testConstraint valgrind]}]
+testConstraint encodingsystemeuro [expr {![
+    catch {encoding convertto -profile strict [encoding system] €}]}]
 
 
 namespace eval ::tcltests {

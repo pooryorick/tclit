@@ -4,6 +4,8 @@
 # See the file "license.terms" for information on usage and redistribution of
 # this file, and for a DISCLAIMER OF ALL WARRANTIES.
 
+# Copyright © 2025 Nathan Coulter
+
 # You may distribute and/or modify this program under the terms of the GNU
 # Affero General Public License as published by the Free Software Foundation,
 # either version 3 of the License, or (at your option) any later version.
@@ -17,10 +19,7 @@
 # commands. Sourcing this file into Tcl runs the tests and generates output
 # for errors. No output means no errors were found.
 
-if {"::tcltest" ni [namespace children]} {
-    package require tcltest 2.5
-    namespace import -force ::tcltest::*
-}
+package require tcltests
 
 ::tcltest::loadTestedCommands
 catch [list package require -exact tcl::test [info patchlevel]]
@@ -776,37 +775,61 @@ test fCmd-6.23 {CopyRenameOneFile: TclpCopyDirectory failed} -setup {
 test fCmd-6.24 {CopyRenameOneFile: error uses original name} -setup {
     cleanup
 } -constraints {unix notRoot} -body {
-    file mkdir [file home]/td1/td2
-    set td1name [file join [file dirname [file home]] [file tail [file home]] td1]
-    file attributes $td1name -permissions 0
-    file copy [file home]/td1 td1
+    set pwd [pwd]
+    file mkdir [temporaryDirectory]/td1/td2
+    file mkdir [temporaryDirectory]/td3
+	cd [temporaryDirectory]/td3
+    try {
+		set td1name [file join [file dirname [temporaryDirectory]] [
+			file tail [temporaryDirectory]] td1]
+		file attributes $td1name -permissions 0
+		file copy [temporaryDirectory]/td1 td1
+    } finally {
+		cd $pwd
+    }
 } -returnCodes error -cleanup {
     file attributes $td1name -permissions 0o755
-    file delete -force [file home]/td1
-} -result "error copying \"[file home]/td1\": permission denied"
+    file delete -force [temporaryDirectory]/td1 [temporaryDirectory]/td3
+} -result "error copying \"[temporaryDirectory]/td1\": permission denied"
 test fCmd-6.25 {CopyRenameOneFile: error uses original name} -setup {
     cleanup
 } -constraints {unix notRoot} -body {
-    file mkdir td2
-    file mkdir [file home]/td1
-    set td1name [file join [file dirname [file home]] [file tail [file home]] td1]
-    file attributes $td1name -permissions 0
-    file copy td2 [file home]/td1
+    set pwd [pwd]
+	cd [temporaryDirectory]
+    try {
+		file mkdir td2
+		file mkdir [temporaryDirectory]/td1
+		set td1name [file join [file dirname [temporaryDirectory]] [
+			file tail [temporaryDirectory]] td1]
+		file attributes $td1name -permissions 0
+		file copy td2 [temporaryDirectory]/td1
+    } finally {
+		cd $pwd
+    }
 } -returnCodes error -cleanup {
     file attributes $td1name -permissions 0o755
-    file delete -force [file home]/td1
-} -result "error copying \"td2\" to \"[file home]/td1/td2\": permission denied"
+    file delete -force [temporaryDirectory]/td1
+} -result "error copying \"td2\" to \"[temporaryDirectory]/td1/td2\": permission denied"
 test fCmd-6.26 {CopyRenameOneFile: doesn't use original name} -setup {
     cleanup
 } -constraints {unix notRoot} -body {
-    file mkdir [file home]/td1/td2
-    set td2name [file join [file dirname [file home]] [file tail [file home]] td1 td2]
-    file attributes $td2name -permissions 0
-    file copy [file home]/td1 td1
+    set pwd [pwd]
+    file mkdir [temporaryDirectory]/td1/td2
+    file mkdir [temporaryDirectory]/td3
+	cd [temporaryDirectory]/td3
+    try {
+		set td2name [file join [file dirname [temporaryDirectory]] [
+			file tail [temporaryDirectory]] td1 td2]
+		file attributes $td2name -permissions 0
+		file copy [temporaryDirectory]/td1 td1
+    } finally {
+		cd [pwd]
+    }
 } -returnCodes error -cleanup {
     file attributes $td2name -permissions 0o755
-    file delete -force [file home]/td1
-} -result "error copying \"[file home]/td1\" to \"td1\": \"[file join $::env(HOME) td1 td2]\": permission denied"
+    file delete -force [temporaryDirectory]/td1 [temporaryDirectory]/td3
+} -result "error copying \"[temporaryDirectory]/td1\" to \"td1\": \"[
+    file join [temporaryDirectory] td1 td2]\": permission denied"
 test fCmd-6.27 {CopyRenameOneFile: TclpCopyDirectory failed} -setup {
     cleanup $tmpspace
 } -constraints {notRoot xdev} -returnCodes error -body {
@@ -903,9 +926,10 @@ test fCmd-8.2 {FileBasename: basename of ~user: argc == 1 && *path == ~} \
     string equal [file tail ~$user] ~$user
 } -result 1
 test fCmd-8.3 {file copy and path translation: ensure correct error} -body {
-    file copy [file home] [file join this file doesnt exist]
-} -returnCodes error -result [subst \
-   {error copying "[file home]" to "[file join this file doesnt exist]": no such file or directory}]
+    file copy [temporaryDirectory] [file join this file doesnt exist]
+} -returnCodes error -result [
+    subst {error copying "[temporaryDirectory]" to "[
+	file join this file doesnt exist]": no such file or directory}]
 
 test fCmd-9.1 {file rename: comprehensive: EACCES} -setup {
     cleanup

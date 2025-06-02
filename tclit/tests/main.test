@@ -5,12 +5,18 @@
 # See the file "COPYING" for information on usage and redistribution
 # of this file, and for a DISCLAIMER OF ALL WARRANTIES.
 
+# Copyright © 2025 Nathan Coulter
+
+# You may distribute and/or modify this program under the terms of the GNU
+# Affero General Public License as published by the Free Software Foundation,
+# either version 3 of the License, or (at your option) any later version.
+#
+# See the file "COPYING" for information on usage and redistribution
+# of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+
 # This file contains a collection of tests for generic/tclMain.c.
 
-if {"::tcltest" ni [namespace children]} {
-    package require tcltest 2.5
-    namespace import -force ::tcltest::*
-}
+package require tcltests
 
 namespace eval ::tcl::test::main {
     namespace import ::tcltest::*
@@ -87,16 +93,17 @@ namespace eval ::tcl::test::main {
     test Tcl_Main-1.4 {
     } -constraints {
 	stdio
+	encodingsystemeuro
     } -setup {
 	makeFile {puts [list $argv0 $argv $tcl_interactive]} script
 	catch {set f [open "|[list [interpreter] script €]" r]}
     } -body {
-	read $f
+	lassign [read $f] script euro interactive
+	list $script [expr {$euro eq {€}}] $interactive
     } -cleanup {
 	close $f
 	removeFile script
-    } -result [list script [list [encoding convertfrom [encoding system] \
-	[encoding convertto [encoding system] €]]] 0]\n
+    } -result [list script 1 0]\n
 
     test Tcl_Main-1.5 {
     } -constraints {
@@ -115,16 +122,18 @@ namespace eval ::tcl::test::main {
     test Tcl_Main-1.6 {
     } -constraints {
 	stdio
+	encodingsystemeuro
     } -setup {
 	makeFile {puts [list $argv0 $argv $tcl_interactive]} €
 	catch {set f [open "|[list [interpreter] €]" r]}
     } -body {
-	read $f
+	lassign [read $f] euro empty interactive
+	list [expr {$euro eq {€}}] $empty $interactive
     } -cleanup {
 	close $f
 	removeFile €
-    } -result [list [list [encoding convertfrom [encoding system] \
-	[encoding convertto [encoding system] €]]] {} 0]\n
+    } -result [list 1 {} 0]
+
 
     test Tcl_Main-1.7 {
 	Tcl_Main: startup script - -encoding option

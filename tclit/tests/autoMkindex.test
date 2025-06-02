@@ -4,6 +4,8 @@
 # See the file "license.terms" for information on usage and redistribution of
 # this file, and for a DISCLAIMER OF ALL WARRANTIES.
 
+# Copyright © 2025 Nathan Coulter
+
 # You may distribute and/or modify this program under the terms of the GNU
 # Affero General Public License as published by the Free Software Foundation,
 # either version 3 of the License, or (at your option) any later version.
@@ -17,10 +19,7 @@
 # autoloading index.
 #
 
-if {"::tcltest" ni [namespace children]} {
-    package require tcltest 2.5
-    namespace import -force ::tcltest::*
-}
+package require tcltests
 
 makeFile {# Test file for:
 #   auto_mkindex

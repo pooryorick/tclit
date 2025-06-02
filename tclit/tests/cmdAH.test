@@ -4,6 +4,8 @@
 # See the file "license.terms" for information on usage and redistribution of
 # this file, and for a DISCLAIMER OF ALL WARRANTIES.
 
+# Copyright © 2025 Nathan Coulter
+
 # You may distribute and/or modify this program under the terms of the GNU
 # Affero General Public License as published by the Free Software Foundation,
 # either version 3 of the License, or (at your option) any later version.
@@ -1658,14 +1660,21 @@ test cmdAH-24.8 {Tcl_FileObjCmd: mtime touch} unix {
 test cmdAH-24.9 {Tcl_FileObjCmd: mtime touch with non-ascii chars} -setup {
     set oldfile $file
 } -constraints unix -body {
-    # introduce some non-ascii characters.
-    append file •
+    # introduce some non-ascii "bullet" character.
+    append file \u2022
+    set file [encoding convertto utf-8 $file]
     file delete -force $file
-    file rename $oldfile $file
-    set mtime [file mtime $file]
-    after 1100; # pause a sec to notice change in mtime
-    set newmtime [clock seconds]
-    set modmtime [file mtime $file $newmtime]
+    set sysencoding [encoding system]
+    encoding system iso8859-1
+    try {
+	file rename $oldfile $file
+	set mtime [file mtime $file]
+	after 1100; # pause a sec to notice change in mtime
+	set newmtime [clock seconds]
+	set modmtime [file mtime $file $newmtime]
+    } finally {
+	encoding system $sysencoding
+    }
     expr {$newmtime == $modmtime ? 1 : "$newmtime != $modmtime"}
 } -cleanup {
     file rename $file $oldfile
