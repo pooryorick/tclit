@@ -232,11 +232,9 @@ PlatformEventsControl(
     if (filePtr->inReadyList) {
 	switch (op) {
 	    case EPOLL_CTL_DEL:
-		if (filePtr->inReadyList) {
-		    LIST_REMOVE(filePtr, readyNode);
-		    filePtr ->inReadyList = 0;
-		    return;
-		}
+		LIST_REMOVE(filePtr, readyNode);
+		filePtr ->inReadyList = 0;
+		return;
 		break;
 	    case EPOLL_CTL_MOD:
 		/*
@@ -264,21 +262,21 @@ PlatformEventsControl(
 		    LIST_INSERT_HEAD(&tsdPtr->firstReadyFileHandlerPtr,
 			    filePtr, readyNode);
 		    filePtr->inReadyList = 1;
+		    return;
 		}
-		break;
-	    case EPOLL_CTL_DEL:
-		Tcl_Panic("epoll_ctl EPOLL_CTL_DEL: %s", strerror(errno));
-		break;
-	    case EPOLL_CTL_MOD:
-		Tcl_Panic("epoll_ctl EPOLL_CTL_MOD: %s", strerror(errno));
-		break;
-	    default:
-		Tcl_Panic("epoll_ctl: %s", strerror(errno));
-		break;
 	    }
-	    break;
+	case ENOENT:
+	    switch (op) {
+		case EPOLL_CTL_DEL:
+		    /*
+			to do:  Is it sensible that this operation is requested
+			for a file that EPOLL doesn't recognize and that isn't
+			in filePtr->inReadyList?
+		    */
+		    return;
+	    }
 	default:
-	    Tcl_Panic("epoll_ctl: %s", strerror(errno));
+	    Tcl_Panic("epoll_ctl: %d %s", op, strerror(errno));
 	}
     }
     return;
